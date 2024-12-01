@@ -6,17 +6,34 @@ Resources:
   FrontendBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: frontend-public-bucket
+      BucketName: !Sub "frontend-public-bucket-${AWS::AccountId}-${AWS::Region}"
       WebsiteConfiguration:
         IndexDocument: index.html
-      AccessControl: PublicRead
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+
+  # Bucket Policy for Frontend Bucket
+  FrontendBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: PublicReadGetObject
+            Effect: Allow
+            Principal: "*"
+            Action: "s3:GetObject"
+            Resource: !Sub "arn:aws:s3:::${FrontendBucket}/*"
 
   # S3 Bucket for Storage
   StorageBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: storage-bucket
-      AccessControl: Private
+      BucketName: !Sub "storage-bucket-${AWS::AccountId}-${AWS::Region}"
 
   # Lambda Execution Role
   LambdaExecutionRole:
@@ -40,8 +57,8 @@ Resources:
                   - s3:PutObject
                   - s3:GetObject
                 Resource:
-                  - !Sub arn:aws:s3:::storage-bucket/*
-                  - !Sub arn:aws:s3:::frontend-public-bucket/*
+                  - !Sub arn:aws:s3:::storage-bucket-${AWS::AccountId}-${AWS::Region}/*
+                  - !Sub arn:aws:s3:::frontend-public-bucket-${AWS::AccountId}-${AWS::Region}/*
               - Effect: Allow
                 Action:
                   - logs:CreateLogGroup
@@ -132,11 +149,8 @@ Outputs:
   FrontendBucketURL:
     Description: URL of the public frontend S3 bucket
     Value: !Sub "http://${FrontendBucket}.s3-website-${AWS::Region}.amazonaws.com"
-    Export:
-      Name: FrontendBucketURL
 
   ApiGatewayEndpoint:
     Description: API Gateway endpoint
     Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com"
-    Export:
-      Name: ApiGatewayEndpoint
+
