@@ -1,7 +1,7 @@
 // Initialize the API Gateway client with static IAM credentials
 const apigClient = apigClientFactory.newClient({
-    accessKey: '<AWS_ACCESS_KEY>', // Replace with your AWS Access Key
-    secretKey: '<AWS_SECRET_KEY>', // Replace with your AWS Secret Key
+    accessKey: 'AKIAQZFG5JYFOWX7IPWN', // Replace with your AWS Access Key
+    secretKey: 'cUYO45lmYXiV9CznJiVLvM5HvJaVv165xYs2Q5kq', // Replace with your AWS Secret Key
     region: 'us-east-1',           // Replace with your AWS region
     defaultContentType: 'application/json',
     defaultAcceptType: 'application/json'
@@ -15,54 +15,87 @@ async function searchPhotos(query) {
 
         // Call the API Gateway's GET /search endpoint
         const response = await apigClient.searchGet(params, null, additionalParams);
-        displayResults(response.data.results); // Display search results
+
+        // If the response contains image data, display it
+        const result = JSON.parse(response.data.body);
+        if (result.image) {
+            displayResults(result);
+        } else {
+            alert(result.message || "No matching photos found.");
+        }
     } catch (error) {
         console.error("Error fetching search results:", error);
         alert("Failed to fetch search results. Please try again.");
     }
 }
 
+
+
 // Display Search Results
-function displayResults(results) {
+function displayResults(result) {
     const resultsContainer = document.getElementById('results');
     resultsContainer.innerHTML = ''; // Clear previous results
 
-    if (results.length === 0) {
-        resultsContainer.innerHTML = '<p>No photos found for your query.</p>';
-        return;
-    }
+    // Create a container for the photo
+    const photoElement = document.createElement('div');
+    photoElement.className = 'photo';
 
-    // Loop through the results and create HTML elements for each photo
-    results.forEach(photo => {
-        const photoElement = document.createElement('div');
-        photoElement.className = 'photo';
-        photoElement.innerHTML = `
-            <img src="https://${photo.bucket}.s3.amazonaws.com/${photo.objectKey}" alt="${photo.objectKey}" />
-            <p><strong>Labels:</strong> ${photo.labels.join(', ')}</p>
-        `;
-        resultsContainer.appendChild(photoElement);
-    });
+    // Set the image and metadata
+    photoElement.innerHTML = `
+        <img src="data:image/jpeg;base64,${result.image}" alt="${result.objectKey}" />
+        <p><strong>Object Key:</strong> ${result.objectKey}</p>
+        <p><strong>Bucket:</strong> ${result.bucket}</p>
+        <p><strong>Labels:</strong> ${result.labels.join(', ')}</p>
+    `;
+
+    resultsContainer.appendChild(photoElement);
 }
 
+
 // Upload Photo
-async function uploadPhoto(file, customLabels = []) {
+async function uploadPhoto(file, customLabels = [], bucketName = 'b2-buckett') {
     try {
-        const additionalParams = {
-            headers: {
-                'Content-Type': file.type,
-                ...(customLabels.length > 0 && { 'X-Amz-Meta-CustomLabels': customLabels.join(', ') }) // Add header only if customLabels exist
-            }
+        // Define parameters for the API call
+        const params = {
+            bucket: bucketName, // Replace with your bucket name
+            filename: file.name // File name
         };
 
-        const params = { object: file.name }; // S3 object key
-        const body = file; // File object to upload
+        // Define headers for the API call
+        const headers = {
+            'Content-Type': file.type, // File MIME type
+            'X-Amz-Meta-CustomLabels': customLabels.length > 0 ? customLabels.join(', ') : '' // Custom labels as metadata
+        };
 
-        // Call the API Gateway's PUT /upload endpoint
-        const response = await apigClient.uploadPut(params, body, additionalParams);
+        // Additional parameters for the API call
+        const additionalParams = {
+            headers: headers
+        };
+
+        // File data to be uploaded
+        const body = file;
+
+        // Debugging logs
+        console.log('Params:', params);
+        console.log('Headers:', headers);
+        console.log('Additional Params:', additionalParams);
+
+        // Make the API call using apigClient
+        const response = await apigClient.uploadBucketFilenamePut(params, body, additionalParams);
+
+        // Log response and notify the user
+        console.log("Upload response:", response);
         alert("Photo uploaded successfully!");
     } catch (error) {
-        console.error("Error uploading photo:", error);
-        alert("Failed to upload photo. Please try again.");
+        // Error handling and logging
+        console.error("Full Error Object:", error);
+        console.error("Error uploading photo:", error.message);
+        if (error.response) {
+            console.error("Error Response:", error.response);
+            alert(`Failed to upload photo: ${error.response.data?.message || error.message}`);
+        } else {
+            alert(`Failed to upload photo: ${error.message}`);
+        }
     }
 }
 
